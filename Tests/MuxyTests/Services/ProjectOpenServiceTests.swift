@@ -14,16 +14,19 @@ struct ProjectOpenServiceTests {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
+        let frecencyRecorder = FrecencyRecordingStub()
         let didConfirm = ProjectOpenService.confirmProjectPath(
             dir.path,
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: frecencyRecorder
         )
 
         #expect(didConfirm)
         #expect(projectStore.projects.count == 1)
         #expect(appState.activeProjectID == projectStore.projects.first?.id)
+        #expect(frecencyRecorder.recordedPaths == [dir.standardizedFileURL.resolvingSymlinksInPath().path])
     }
 
     @Test("already-added path is selected without creating a duplicate project")
@@ -38,7 +41,8 @@ struct ProjectOpenServiceTests {
             dir.path,
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub()
         ))
         appState.activeProjectID = nil
 
@@ -46,7 +50,8 @@ struct ProjectOpenServiceTests {
             dir.path,
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub()
         ))
         #expect(projectStore.projects.count == 1)
         #expect(appState.activeProjectID == projectStore.projects.first?.id)
@@ -59,14 +64,15 @@ struct ProjectOpenServiceTests {
             .appendingPathComponent("muxy-project-picker-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let project = Project(name: dir.lastPathComponent, path: dir.standardizedFileURL.path)
+        let project = Project(name: dir.lastPathComponent, path: dir.standardizedFileURL.resolvingSymlinksInPath().path)
         projectStore.add(project)
 
         let didConfirm = ProjectOpenService.confirmProjectPath(
             dir.path,
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub()
         )
 
         #expect(didConfirm)
@@ -86,10 +92,11 @@ struct ProjectOpenServiceTests {
         projectStore.add(project)
 
         let result = ProjectOpenService.confirmProjectPathResult(
-            dir.standardizedFileURL.path,
+            dir.standardizedFileURL.resolvingSymlinksInPath().path,
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub()
         )
 
         #expect(result == .success)
@@ -110,6 +117,7 @@ struct ProjectOpenServiceTests {
             appState: appState,
             projectStore: projectStore,
             worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub(),
             createIfMissing: true
         )
 
@@ -119,6 +127,7 @@ struct ProjectOpenServiceTests {
             appState: appState,
             projectStore: projectStore,
             worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub(),
             createIfMissing: true
         ))
         #expect(projectStore.projects.isEmpty)
@@ -136,7 +145,8 @@ struct ProjectOpenServiceTests {
             dir.path,
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub()
         )
 
         #expect(!didConfirm)
@@ -157,12 +167,13 @@ struct ProjectOpenServiceTests {
             appState: appState,
             projectStore: projectStore,
             worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub(),
             createIfMissing: true
         )
 
         #expect(didConfirm)
         #expect(FileManager.default.fileExists(atPath: dir.path))
-        #expect(projectStore.projects.first?.path == dir.standardizedFileURL.path)
+        #expect(projectStore.projects.first?.path == dir.standardizedFileURL.resolvingSymlinksInPath().path)
     }
 
     @Test("create failure returns create failed without adding a project")
@@ -172,6 +183,7 @@ struct ProjectOpenServiceTests {
             appState: appState,
             projectStore: projectStore,
             worktreeStore: worktreeStore,
+            frecencyRecorder: FrecencyRecordingStub(),
             fileSystem: ProjectPathConfirmationFileSystemStub(
                 state: .missing,
                 createError: ProjectPathConfirmationFileSystemStub.Error()
@@ -183,6 +195,26 @@ struct ProjectOpenServiceTests {
         #expect(result == .createFailed)
         #expect(projectStore.projects.isEmpty)
         #expect(appState.activeProjectID == nil)
+    }
+
+    @Test("a rejected confirmation does not record a frecency visit")
+    func rejectedConfirmationDoesNotRecordVisit() throws {
+        let (appState, projectStore, worktreeStore) = makeStores()
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muxy-project-picker-test-\(UUID().uuidString)")
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let frecencyRecorder = FrecencyRecordingStub()
+
+        _ = ProjectOpenService.confirmProjectPathResult(
+            file.path,
+            appState: appState,
+            projectStore: projectStore,
+            worktreeStore: worktreeStore,
+            frecencyRecorder: frecencyRecorder
+        )
+
+        #expect(frecencyRecorder.recordedPaths.isEmpty)
     }
 
     @Test("custom picker preference posts picker notification without opening Finder")
@@ -325,3 +357,4 @@ private final class TerminalViewRemovingStub: TerminalViewRemoving {
     func removeView(for paneID: UUID) {}
     func needsConfirmQuit(for paneID: UUID) -> Bool { false }
 }
+

@@ -31,6 +31,7 @@ struct ProjectPickerPathField: NSViewRepresentable {
         context.coordinator.parent = self
         if nsView.stringValue != text {
             nsView.stringValue = text
+            (nsView as? ProjectPickerNSTextField)?.moveCursorToEnd()
         }
         if let field = nsView as? ProjectPickerNSTextField {
             field.onCommand = onCommand
@@ -47,6 +48,7 @@ struct ProjectPickerPathField: NSViewRepresentable {
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField else { return }
+            guard (field.currentEditor() as? NSTextView)?.hasMarkedText() != true else { return }
             parent.text = field.stringValue
         }
 
@@ -103,6 +105,10 @@ private enum ProjectPickerPathFieldCommandMapper {
     static func command(for event: NSEvent) -> ProjectPickerCommand? {
         if event.keyCode == kVK_Escape { return .dismiss }
         if event.keyCode == kVK_Return, event.modifierFlags.contains(.command) { return .confirmTypedPath }
+        let strictMask: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+        let commandOnly = event.modifierFlags.intersection(strictMask) == .command
+        if commandOnly, event.keyCode == kVK_ANSI_1 { return .switchToRecent }
+        if commandOnly, event.keyCode == kVK_ANSI_2 { return .switchToBrowse }
         return nil
     }
 }

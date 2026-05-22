@@ -27,6 +27,14 @@ flowchart TB
 
 All entry points dedupe — opening the same path twice activates the existing project.
 
+## Recent and Browse modes
+
+The **Open Project** sheet (`⌘O`) has two modes you switch between with `⌘1` (Recent) and `⌘2` (Browse). The sheet remembers the mode you used last time.
+
+**Recent** ranks the projects you've opened before by *frecency* — a blend of how often and how recently you opened each one. Type to filter the list by project name. Press `↵` to open the highlighted entry. Picking an entry whose folder is gone prompts you to remove it from the list. Projects already in the sidebar don't appear here.
+
+**Browse** is the path-typing folder explorer. Type or paste a path, autocomplete with `Tab`, descend with `↵`, go up with `⌥⌫`, and add a typed path with `⌘↵`.
+
 ## Customising appearance
 
 Right‑click a project in the sidebar:
@@ -52,7 +60,7 @@ Muxy auto‑discovers IDE‑like apps installed on your Mac (VS Code, Zed, Subli
 
 ## Persistence
 
-Projects live at `~/Library/Application Support/Muxy/projects.json`. Tabs and splits are in‑memory only and lost on app close — use [Layouts](layouts/README.md) for a reproducible workspace.
+Projects live at `~/Library/Application Support/Muxy/projects.json`, and the **Jump to** open history at `~/Library/Application Support/Muxy/frecency.json`. Tabs and splits are in‑memory only and lost on app close — use [Layouts](layouts/README.md) for a reproducible workspace.
 
 ## Settings
 

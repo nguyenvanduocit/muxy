@@ -30,6 +30,7 @@ struct MainWindow: View {
     @Environment(ProjectStore.self) private var projectStore
     @Environment(WorktreeStore.self) private var worktreeStore
     @Environment(ProjectGroupStore.self) private var projectGroupStore
+    @Environment(FrecencyStore.self) private var frecencyStore
     @Environment(GhosttyService.self) private var ghostty
     @Environment(\.openWindow) private var openWindow
     @State private var dragCoordinator = TabDragCoordinator()
@@ -208,12 +209,14 @@ struct MainWindow: View {
             if showProjectPicker {
                 ProjectPickerOverlay(
                     projectPaths: projectStore.projects.map(\.path),
+                    frecencyStore: frecencyStore,
                     onConfirm: { path, createIfMissing in
                         ProjectOpenService.confirmProjectPathResult(
                             path,
                             appState: appState,
                             projectStore: projectStore,
                             worktreeStore: worktreeStore,
+                            frecencyRecorder: frecencyStore,
                             createIfMissing: createIfMissing
                         )
                     },

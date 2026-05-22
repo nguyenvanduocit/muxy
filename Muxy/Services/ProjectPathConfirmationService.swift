@@ -48,16 +48,19 @@ struct ProjectPathConfirmationService {
     let projectStore: ProjectStore
     let worktreeStore: WorktreeStore
     let fileSystem: any ProjectPathConfirmationFileSystem
+    let frecencyRecorder: any FrecencyRecording
 
     init(
         appState: AppState,
         projectStore: ProjectStore,
         worktreeStore: WorktreeStore,
+        frecencyRecorder: any FrecencyRecording,
         fileSystem: any ProjectPathConfirmationFileSystem = FileManagerProjectPathConfirmationFileSystem()
     ) {
         self.appState = appState
         self.projectStore = projectStore
         self.worktreeStore = worktreeStore
+        self.frecencyRecorder = frecencyRecorder
         self.fileSystem = fileSystem
     }
 
@@ -75,6 +78,7 @@ struct ProjectPathConfirmationService {
         worktreeStore.ensurePrimary(for: project)
         guard let primary = worktreeStore.primary(for: project.id) else { return .failed }
         appState.selectProject(project, worktree: primary)
+        frecencyRecorder.recordVisit(path: standardizedPath)
         return .success
     }
 

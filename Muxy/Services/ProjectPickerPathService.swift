@@ -201,7 +201,7 @@ struct ProjectPickerPathService {
     }
 
     func abbreviatedDirectoryDisplayPath(_ path: String) -> String {
-        let standardizedPath = Self.standardizedPath(path)
+        let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         let displayPath: String = if standardizedPath == homeDirectory {
             "~"
         } else if standardizedPath.hasPrefix(homeDirectory + "/") {
@@ -213,7 +213,7 @@ struct ProjectPickerPathService {
     }
 
     static func standardizedPath(_ path: String) -> String {
-        URL(fileURLWithPath: path).standardizedFileURL.path
+        URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     private func confirmPath(for trimmedInput: String) -> String {

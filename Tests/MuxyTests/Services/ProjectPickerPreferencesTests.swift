@@ -146,6 +146,23 @@ struct ProjectPickerPreferencesTests {
         #expect(ProjectPickerDefaultLocation.path(defaults: defaults) == NSHomeDirectory())
         #expect(ProjectPickerDefaultLocation.state(defaults: defaults).usesAppDefault)
     }
+
+    @Test("overlay mode defaults to browse on first install when no value is stored")
+    func overlayModeDefaultsToBrowse() {
+        let suiteName = "ProjectPickerPreferencesTests-overlayDefault-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create test user defaults suite")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferences = ProjectPickerPreferences(defaults: defaults)
+
+        #expect(preferences.overlayMode == .browse)
+
+        preferences.overlayMode = .recent
+        let reloaded = ProjectPickerPreferences(defaults: defaults)
+        #expect(reloaded.overlayMode == .recent)
+    }
 }
 
 private struct ProjectPickerDefaultLocationFileSystemStub: ProjectPickerFileSystem {

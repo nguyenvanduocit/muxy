@@ -43,6 +43,7 @@ When a pane is maximized, tab shortcut offsets are scoped to that pane so `âŒ˜1â
 | File | Contents |
 | --- | --- |
 | `~/Library/Application Support/Muxy/projects.json` | Project list, including optional preferred worktree parent. |
+| `~/Library/Application Support/Muxy/frecency.json` | Open-project history (path, decayed score, last visit) powering the Open Project "Jump to" list. |
 | `~/Library/Application Support/Muxy/worktrees/{projectID}.json` | Per-project worktrees (managed vs externally discovered). |
 | `~/Library/Application Support/Muxy/workspaces.json` | Tab/split snapshots, terminal cwds, custom titles + colors. |
 | `~/Library/Application Support/Muxy/keybindings.json` | Remapped keyboard shortcuts. |

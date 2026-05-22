@@ -1,30 +1,25 @@
 import Foundation
 
 struct ProjectPickerSession {
-    private(set) var input: String
-    private(set) var rows: [ProjectPickerDirectoryItem] = []
-    private(set) var highlightedIndex: Int?
-    private(set) var directoryLoadState = ProjectPickerDirectoryLoadState.loading(showsMessage: false)
+    private(set) var mode: ProjectPickerOverlayMode
+    private(set) var recent: RecentState
+    private(set) var browse: BrowseState
 
     let homeDirectory: String
+    let initialDisplayPath: String
     let pathService: ProjectPickerPathService
     var projectPaths: [String]
 
     var pathState: ProjectPickerPathState {
-        pathService.state(for: input)
+        pathService.state(for: browse.input)
     }
 
     var navigator: ProjectPickerNavigator {
         ProjectPickerNavigator(pathState: pathState)
     }
 
-    var highlightedItem: ProjectPickerDirectoryItem? {
-        guard let highlightedIndex, highlightedIndex < rows.count else { return nil }
-        return rows[highlightedIndex]
-    }
-
-    var highlightedRow: String? {
-        highlightedItem?.name
+    var isAtDefaultInput: Bool {
+        browse.input == initialDisplayPath
     }
 
     var standardizedTypedPath: String {
@@ -50,28 +45,36 @@ struct ProjectPickerSession {
     }
 
     var ghostText: String {
-        navigator.ghostText(highlightedRow: highlightedRow)
+        guard mode == .browse,
+              let highlighted = browse.highlightedItem,
+              !highlighted.isParent
+        else { return "" }
+        return navigator.ghostText(highlightedRow: highlighted.name)
     }
 
-    var projectRows: [ProjectPickerDirectoryItem] {
-        rows.filter { !$0.isParent }
+    var browseProjectRows: [ProjectPickerDirectoryItem] {
+        browse.directoryItems.filter { !$0.isParent }
     }
 
-    var hasParentRow: Bool {
-        rows.contains(where: \.isParent)
+    var browseHasParentRow: Bool {
+        browse.directoryItems.contains(where: \.isParent)
     }
 
-    var showsUnavailableProjectState: Bool {
-        directoryLoadState.readFailed || projectRows.isEmpty
+    var browseShowsUnavailableProjectState: Bool {
+        browse.directoryLoadState.readFailed || browseProjectRows.isEmpty
     }
 
     init(
         defaultDisplayPath: String,
         homeDirectory: String = NSHomeDirectory(),
         projectPaths: [String],
+        mode: ProjectPickerOverlayMode = .browse,
         pathService: ProjectPickerPathService? = nil
     ) {
-        input = defaultDisplayPath
+        self.mode = mode
+        recent = RecentState()
+        browse = BrowseState(input: defaultDisplayPath)
+        initialDisplayPath = defaultDisplayPath
         self.homeDirectory = homeDirectory
         self.projectPaths = projectPaths
         self.pathService = pathService ?? ProjectPickerPathService(homeDirectory: homeDirectory)
@@ -81,67 +84,131 @@ struct ProjectPickerSession {
         self.projectPaths = projectPaths
     }
 
-    mutating func setInput(_ input: String) {
-        self.input = input
-        directoryLoadState = .loading(showsMessage: false)
+    mutating func setMode(_ newMode: ProjectPickerOverlayMode) {
+        mode = newMode
     }
 
-    mutating func showLoadingMessage() {
-        guard directoryLoadState.isLoading else { return }
-        directoryLoadState = .loading(showsMessage: true)
+    mutating func setRecentFilter(_ filter: String) {
+        recent.filter = filter
+        recent.highlightedIndex = nil
     }
 
-    mutating func selectRow(at index: Int) {
-        guard rows.indices.contains(index) else { return }
-        highlightedIndex = index
+    mutating func setRecentRows(_ rows: [FrecencyRow]) {
+        recent.rows = rows
+        recent.highlightedIndex = recentClampedHighlight()
+    }
+
+    mutating func selectRecentRow(at index: Int) {
+        guard recent.rows.indices.contains(index) else { return }
+        recent.highlightedIndex = index
+    }
+
+    mutating func setBrowseInput(_ input: String) {
+        browse.input = input
+        browse.highlightedIndex = nil
+    }
+
+    mutating func showBrowseLoadingMessage() {
+        guard browse.directoryLoadState.isLoading else { return }
+        browse.directoryLoadState = .loading(showsMessage: true)
+    }
+
+    mutating func beginBrowseLoad() {
+        browse.directoryLoadState = .loading(showsMessage: false)
+    }
+
+    mutating func cancelBrowseLoad() {
+        browse.directoryLoadState = .idle
+    }
+
+    mutating func selectBrowseRow(at index: Int) {
+        guard browse.directoryItems.indices.contains(index) else { return }
+        browse.highlightedIndex = index
     }
 
     mutating func applyDirectorySnapshot(_ snapshot: ProjectPickerDirectorySnapshot) {
-        directoryLoadState = snapshot.readFailed ? .failed : .loaded
-        rows = snapshot.rows
-        highlightedIndex = initialHighlightedIndex(for: snapshot.rows)
+        browse.directoryLoadState = snapshot.readFailed ? .failed : .loaded
+        browse.directoryItems = snapshot.rows
+        browse.highlightedIndex = browseInitialHighlight()
     }
 
     mutating func handle(_ command: ProjectPickerCommand) {
+        switch mode {
+        case .recent:
+            handleRecent(command)
+        case .browse:
+            handleBrowse(command)
+        }
+    }
+
+    func resolveRecentActivation(at index: Int) -> ProjectPickerSessionActivation? {
+        guard recent.rows.indices.contains(index) else { return nil }
+        return .confirmPath(recent.rows[index].path)
+    }
+
+    mutating func activateBrowseRow(at index: Int) -> ProjectPickerSessionActivation? {
+        guard browse.directoryItems.indices.contains(index) else { return nil }
+        let row = browse.directoryItems[index]
+        guard !browse.directoryLoadState.isLoading || row.isParent else { return nil }
+        descend(row)
+        return .descended
+    }
+
+    private mutating func handleRecent(_ command: ProjectPickerCommand) {
         switch command {
         case .moveHighlightUp:
-            moveHighlight(-1)
+            moveRecentHighlight(-1)
         case .moveHighlightDown:
-            moveHighlight(1)
-        case .openHighlighted:
-            guard let highlightedItem else { return }
-            descend(highlightedItem)
-        case .confirmTypedPath:
+            moveRecentHighlight(1)
+        case .openHighlighted,
+             .confirmTypedPath,
+             .completeHighlighted,
+             .switchToRecent,
+             .switchToBrowse,
+             .goBack,
+             .dismiss:
+            return
+        }
+    }
+
+    private mutating func handleBrowse(_ command: ProjectPickerCommand) {
+        switch command {
+        case .moveHighlightUp:
+            moveBrowseHighlight(-1)
+        case .moveHighlightDown:
+            moveBrowseHighlight(1)
+        case .openHighlighted,
+             .confirmTypedPath,
+             .switchToRecent,
+             .switchToBrowse,
+             .dismiss:
             return
         case .goBack:
             goUp()
-        case .dismiss:
-            return
         case .completeHighlighted:
-            guard let highlightedRow else { return }
-            setInput(navigator.completedPath(highlightedRow: highlightedRow))
+            guard let highlighted = browse.highlightedItem, !highlighted.isParent else { return }
+            setBrowseInput(navigator.completedPath(highlightedRow: highlighted.name))
         }
     }
 
-    mutating func activate(row: ProjectPickerDirectoryItem) {
-        descend(row)
-    }
-
-    func isParentDirectoryRow(_ row: String) -> Bool {
-        navigator.isParentDirectoryRow(row)
-    }
-
-    func isParentDirectoryRow(_ row: ProjectPickerDirectoryItem) -> Bool {
-        row.isParent
-    }
-
-    private mutating func moveHighlight(_ delta: Int) {
+    private mutating func moveRecentHighlight(_ delta: Int) {
+        let rows = recent.rows
         guard !rows.isEmpty else { return }
-        guard let current = highlightedIndex else {
-            highlightedIndex = delta > 0 ? 0 : rows.count - 1
+        guard let current = recent.highlightedIndex else {
+            recent.highlightedIndex = delta > 0 ? 0 : rows.count - 1
             return
         }
-        highlightedIndex = max(0, min(rows.count - 1, current + delta))
+        recent.highlightedIndex = max(0, min(rows.count - 1, current + delta))
+    }
+
+    private mutating func moveBrowseHighlight(_ delta: Int) {
+        let items = browse.directoryItems
+        guard !items.isEmpty else { return }
+        guard let current = browse.highlightedIndex else {
+            browse.highlightedIndex = delta > 0 ? 0 : items.count - 1
+            return
+        }
+        browse.highlightedIndex = max(0, min(items.count - 1, current + delta))
     }
 
     private mutating func descend(_ row: ProjectPickerDirectoryItem) {
@@ -149,19 +216,50 @@ struct ProjectPickerSession {
             goUp()
             return
         }
-        setInput(navigator.completedPath(highlightedRow: row.name))
+        setBrowseInput(navigator.completedPath(highlightedRow: row.name))
     }
 
     private mutating func goUp() {
         let parentPath = navigator.parentDisplayPath
-        guard parentPath != input else { return }
-        setInput(parentPath)
+        guard parentPath != browse.input else { return }
+        setBrowseInput(parentPath)
     }
 
-    private func initialHighlightedIndex(for rows: [ProjectPickerDirectoryItem]) -> Int? {
-        guard !rows.isEmpty else { return nil }
-        guard rows.first?.isParent == true, rows.count > 1 else { return 0 }
+    private func browseInitialHighlight() -> Int? {
+        let items = browse.directoryItems
+        guard !items.isEmpty else { return nil }
+        guard items.first?.isParent == true, items.count > 1 else { return 0 }
         return 1
+    }
+
+    private func recentClampedHighlight() -> Int? {
+        let rows = recent.rows
+        guard !rows.isEmpty else { return nil }
+        guard let highlighted = recent.highlightedIndex else { return 0 }
+        return min(highlighted, rows.count - 1)
+    }
+}
+
+struct RecentState {
+    var filter: String = ""
+    var rows: [FrecencyRow] = []
+    var highlightedIndex: Int?
+
+    var highlightedItem: FrecencyRow? {
+        guard let highlightedIndex, rows.indices.contains(highlightedIndex) else { return nil }
+        return rows[highlightedIndex]
+    }
+}
+
+struct BrowseState {
+    var input: String
+    var directoryItems: [ProjectPickerDirectoryItem] = []
+    var directoryLoadState: ProjectPickerDirectoryLoadState = .idle
+    var highlightedIndex: Int?
+
+    var highlightedItem: ProjectPickerDirectoryItem? {
+        guard let highlightedIndex, directoryItems.indices.contains(highlightedIndex) else { return nil }
+        return directoryItems[highlightedIndex]
     }
 }
 
@@ -188,6 +286,7 @@ struct ProjectPickerConfirmationFailurePresentation: Equatable {
 }
 
 enum ProjectPickerDirectoryLoadState: Equatable {
+    case idle
     case loading(showsMessage: Bool)
     case loaded
     case failed
@@ -204,5 +303,16 @@ enum ProjectPickerDirectoryLoadState: Equatable {
 
     var readFailed: Bool {
         self == .failed
+    }
+
+    var needsLoad: Bool {
+        switch self {
+        case .loaded:
+            false
+        case .idle,
+             .loading,
+             .failed:
+            true
+        }
     }
 }

@@ -77,6 +77,7 @@ enum ProjectOpenService {
         appState: AppState,
         projectStore: ProjectStore,
         worktreeStore: WorktreeStore,
+        frecencyRecorder: any FrecencyRecording,
         createIfMissing: Bool = false
     ) -> Bool {
         confirmProjectPathResult(
@@ -84,6 +85,7 @@ enum ProjectOpenService {
             appState: appState,
             projectStore: projectStore,
             worktreeStore: worktreeStore,
+            frecencyRecorder: frecencyRecorder,
             createIfMissing: createIfMissing
         ).didConfirm
     }
@@ -94,12 +96,14 @@ enum ProjectOpenService {
         appState: AppState,
         projectStore: ProjectStore,
         worktreeStore: WorktreeStore,
+        frecencyRecorder: any FrecencyRecording,
         createIfMissing: Bool = false
     ) -> ProjectOpenConfirmationResult {
         ProjectPathConfirmationService(
             appState: appState,
             projectStore: projectStore,
-            worktreeStore: worktreeStore
+            worktreeStore: worktreeStore,
+            frecencyRecorder: frecencyRecorder
         )
         .confirm(path: path, createIfMissing: createIfMissing)
     }

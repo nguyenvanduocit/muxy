@@ -13,7 +13,7 @@ struct GeneralSettingsView: View {
     @AppStorage(ProjectLifecyclePreferences.keepOpenWhenNoTabsKey)
     private var keepProjectsOpenWhenNoTabs = false
     @AppStorage(ProjectPickerPreferences.storageKey)
-    private var projectPickerModeRaw = ProjectPickerMode.custom.rawValue
+    private var projectPickerModeRaw = ProjectPickerPresentationMode.custom.rawValue
     @AppStorage(UpdateChannel.storageKey)
     private var updateChannelRaw = UpdateChannel.stable.rawValue
     @AppStorage(QuitConfirmationPreferences.confirmQuitKey)
@@ -73,7 +73,7 @@ struct GeneralSettingsView: View {
             ) {
                 SettingsRow("Muxy Picker") {
                     Picker("", selection: $projectPickerModeRaw) {
-                        ForEach(ProjectPickerMode.allCases) { mode in
+                        ForEach(ProjectPickerPresentationMode.allCases) { mode in
                             Text(mode.label).tag(mode.rawValue)
                         }
                     }
@@ -159,8 +159,8 @@ struct GeneralSettingsView: View {
         )
     }
 
-    private var projectPickerMode: ProjectPickerMode {
-        ProjectPickerMode(rawValue: projectPickerModeRaw) ?? .custom
+    private var projectPickerMode: ProjectPickerPresentationMode {
+        ProjectPickerPresentationMode(rawValue: projectPickerModeRaw) ?? .custom
     }
 
     private var projectsFooter: String {

@@ -4,29 +4,46 @@ import Testing
 
 @Suite("ProjectPickerFooterShortcut")
 struct ProjectPickerFooterShortcutTests {
-    @Test("tab autocomplete shortcut is shown in the footer")
-    func tabAutocompleteShortcutIsShown() {
-        let shortcuts = ProjectPickerFooterShortcut.ordered(actionTitle: "Add Project")
+    @Test("browse footer lists path-typing shortcuts and a switch to recent")
+    func browseFooterShortcuts() {
+        let shortcuts = ProjectPickerFooterShortcut.ordered(mode: .browse, actionTitle: "Add Project")
 
-        #expect(shortcuts.map(\.label) == ["Navigate", "Autocomplete", "Open", "Add Project", "Go back", "Close"])
+        #expect(shortcuts.map(\.label) == ["Navigate", "Autocomplete", "Open", "Add Project", "Go back", "Recent", "Close"])
         #expect(shortcuts.map(\.intents) == [
             [.moveHighlightUp, .moveHighlightDown],
             [.completeHighlighted],
             [.openHighlighted],
             [.confirmTypedPath],
             [.goBack],
+            [.switchToRecent],
             [.dismiss],
         ])
         #expect(shortcuts.flatMap(\.intents).allSatisfy(ProjectPickerCommand.handledIntents.contains))
         #expect(shortcuts[1].keycap == .tab)
         #expect(shortcuts[4].keycap == .optionDelete)
-        #expect(shortcuts[5].keycap == .escape)
+        #expect(shortcuts[5].keycap == .commandOne)
+        #expect(shortcuts[6].keycap == .escape)
     }
 
-    @Test("typed path action title changes label without changing command identity")
+    @Test("recent footer omits browse-only shortcuts and offers switch to browse")
+    func recentFooterShortcuts() {
+        let shortcuts = ProjectPickerFooterShortcut.ordered(mode: .recent, actionTitle: "Add Project")
+
+        #expect(shortcuts.map(\.label) == ["Navigate", "Open", "Browse", "Close"])
+        #expect(shortcuts.map(\.intents) == [
+            [.moveHighlightUp, .moveHighlightDown],
+            [.openHighlighted],
+            [.switchToBrowse],
+            [.dismiss],
+        ])
+        #expect(shortcuts[2].keycap == .commandTwo)
+        #expect(shortcuts[3].keycap == .escape)
+    }
+
+    @Test("browse typed path action title changes label without changing command identity")
     func typedPathActionTitleOnlyChangesLabel() {
-        let addShortcuts = ProjectPickerFooterShortcut.ordered(actionTitle: "Add Project")
-        let createShortcuts = ProjectPickerFooterShortcut.ordered(actionTitle: "Create & Add Project")
+        let addShortcuts = ProjectPickerFooterShortcut.ordered(mode: .browse, actionTitle: "Add Project")
+        let createShortcuts = ProjectPickerFooterShortcut.ordered(mode: .browse, actionTitle: "Create & Add Project")
 
         #expect(addShortcuts.map(\.intents) == createShortcuts.map(\.intents))
         #expect(addShortcuts[3].label == "Add Project")
